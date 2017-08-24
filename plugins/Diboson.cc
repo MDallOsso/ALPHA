@@ -35,6 +35,7 @@ Diboson::Diboson(const edm::ParameterSet& iConfig):
     TriggerPSet(iConfig.getParameter<edm::ParameterSet>("triggerSet")),
     ElectronPSet(iConfig.getParameter<edm::ParameterSet>("electronSet")),
     MuonPSet(iConfig.getParameter<edm::ParameterSet>("muonSet")),
+    MuonLoosePSet(iConfig.getParameter<edm::ParameterSet>("muonLooseSet")),
     TauPSet(iConfig.getParameter<edm::ParameterSet>("tauSet")),
     PhotonPSet(iConfig.getParameter<edm::ParameterSet>("photonSet")),
     JetPSet(iConfig.getParameter<edm::ParameterSet>("jetSet")),
@@ -61,6 +62,7 @@ Diboson::Diboson(const edm::ParameterSet& iConfig):
     theTriggerAnalyzer  = new TriggerAnalyzer(TriggerPSet, consumesCollector());
     theElectronAnalyzer = new ElectronAnalyzer(ElectronPSet, consumesCollector());
     theMuonAnalyzer     = new MuonAnalyzer(MuonPSet, consumesCollector());
+    theMuonLooseAnalyzer= new MuonAnalyzer(MuonLoosePSet, consumesCollector());
     theTauAnalyzer      = new TauAnalyzer(TauPSet, consumesCollector());
     thePhotonAnalyzer   = new PhotonAnalyzer(PhotonPSet, consumesCollector());
     theJetAnalyzer      = new JetAnalyzer(JetPSet, consumesCollector());
@@ -153,7 +155,9 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
     RunNumber = iEvent.id().run();
     
     EventWeight = StitchWeight = ZewkWeight = WewkWeight = 1.;
-    TriggerWeight = 1.;
+    TriggerWeight = TriggerWeightUp = TriggerWeightDown = 1.;
+    BTagWeight = BTagWeightUp = BTagWeightDown = 1.;
+    MaxBTagWeight = MaxBTagWeightUp = MaxBTagWeightDown = 1.;
     LeptonWeight = LeptonWeightUp = LeptonWeightDown = 1.;
     PUWeight = PUWeightUp = PUWeightDown = 1.;
     FacWeightUp = FacWeightDown = RenWeightUp = RenWeightDown = ScaleWeightUp = ScaleWeightDown = 1.;
@@ -162,6 +166,7 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
     nPV = nElectrons = nMuons = nTaus = nPhotons = nJets = nFatJets = nBTagJets = 1;
     nVetoElectrons = nLooseMuons = 0;
     MaxJetBTag = MaxFatJetBTag = Chi2 = -1.;
+    MaxJetBIndex = 100;
     MinJetMetDPhi = 10.;
     massRecoilFormula = -1.;
 
@@ -201,25 +206,20 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
     theTriggerAnalyzer->FillMetFiltersMap(iEvent, MetFiltersMap);
     BadPFMuonFlag = theTriggerAnalyzer->GetBadPFMuonFlag(iEvent);
     BadChCandFlag = theTriggerAnalyzer->GetBadChCandFlag(iEvent);
-    EventWeight *= TriggerWeight;
     
     // Electrons
-    std::vector<pat::Electron> ElecVect = theElectronAnalyzer->FillElectronVector(iEvent);
-    nElectrons = ElecVect.size();
-    for(unsigned int i =0; i<ElecVect.size(); i++){
-        if(ElecVect.at(i).userInt("isVeto")==1) nVetoElectrons++;
+    std::vector<pat::Electron> ElecVetoVect = theElectronAnalyzer->FillElectronVector(iEvent);
+    nVetoElectrons = ElecVetoVect.size();
+    std::vector<pat::Electron> ElecVect; 
+    for(unsigned int i =0; i<ElecVetoVect.size(); i++){
+        if(ElecVetoVect.at(i).userInt("isLoose")==1 && ElecVetoVect.at(i).pt()>20) ElecVect.push_back(ElecVetoVect.at(i));
     }
 
     // Muons
     std::vector<pat::Muon> MuonVect = theMuonAnalyzer->FillMuonVector(iEvent);
     nMuons = MuonVect.size();
-    std::vector<pat::Muon> LooseMuonVect;
-    for(unsigned int i =0; i<MuonVect.size(); i++){
-        if(MuonVect.at(i).userInt("isLoose")==1){
-	    LooseMuonVect.push_back(MuonVect.at(i));
-            nLooseMuons++;
-        }
-    }
+    std::vector<pat::Muon> MuonLooseVect = theMuonLooseAnalyzer->FillMuonVector(iEvent);
+    nLooseMuons = MuonLooseVect.size();
     
     // Taus
     std::vector<pat::Tau> TauVect = theTauAnalyzer->FillTauVector(iEvent);
@@ -258,25 +258,39 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
     
     // Gen weights
     std::map<int, float> GenWeight = theGenAnalyzer->FillWeightsMap(iEvent);
-    EventWeight *= GenWeight[-1];
-    if(GenWeight.find(2) != GenWeight.end()) FacWeightUp     = GenWeight[2];
-    if(GenWeight.find(3) != GenWeight.end()) FacWeightDown   = GenWeight[3];
-    if(GenWeight.find(4) != GenWeight.end()) RenWeightUp     = GenWeight[4];
-    if(GenWeight.find(7) != GenWeight.end()) RenWeightDown   = GenWeight[7];
-    if(GenWeight.find(5) != GenWeight.end()) ScaleWeightUp   = GenWeight[5];
-    if(GenWeight.find(9) != GenWeight.end()) ScaleWeightDown = GenWeight[9];
+
+//     if(GenWeight.find(0) != GenWeight.end()) EventWeight    *= GenWeight[0];
+    if(GenWeight.find(-1) != GenWeight.end()) EventWeight   *= GenWeight[-1];
+    if(GenWeight.find(1) != GenWeight.end()) FacWeightUp     = GenWeight[1];
+    if(GenWeight.find(2) != GenWeight.end()) FacWeightDown   = GenWeight[2];
+    if(GenWeight.find(3) != GenWeight.end()) RenWeightUp     = GenWeight[3];
+    if(GenWeight.find(6) != GenWeight.end()) RenWeightDown   = GenWeight[6];
+    if(GenWeight.find(4) != GenWeight.end()) ScaleWeightUp   = GenWeight[4];
+    if(GenWeight.find(8) != GenWeight.end()) ScaleWeightDown = GenWeight[8];
     
-    float tmpPdfWeight = 0.;
+    float sumPdfWeight = 0.;
+    float sqsumPdfWeight = 0.;
     int   tmpPdfN = 0;
     for(auto const& pdfw : GenWeight) {
-        if (pdfw.first > 9 && pdfw.second>0) {
+        if (pdfw.first >=   9  && 
+            pdfw.first <= 109  && 
+            pdfw.second>0) { 
             ++tmpPdfN;
-//             std::cout << "pdf " << tmpPdfN << " = " << pdfw.second << "\n";
-            tmpPdfWeight = tmpPdfWeight + pdfw.second*pdfw.second;
+            sumPdfWeight   = sumPdfWeight   + pdfw.second;
+            sqsumPdfWeight = sqsumPdfWeight + pdfw.second*pdfw.second;
         }
     }
-    PdfWeight = sqrt(tmpPdfWeight/tmpPdfN);
-//     std::cout << "PdfWeight " << PdfWeight << "\n";
+    if (tmpPdfN>0) PdfWeight = 1. + sqrt(sqsumPdfWeight/float(tmpPdfN)) - sumPdfWeight/float(tmpPdfN); /// 1 + RMS - MEAN
+
+//     std::cout << "GenWeight       " << GenWeight[-1] << "\n";
+//     std::cout << "GenWeight       " << GenWeight[0] << "\n";
+//     std::cout << "FacWeightUp     " << FacWeightUp << "\n";
+//     std::cout << "FacWeightDown   " << FacWeightDown << "\n";
+//     std::cout << "RenWeightUp     " << RenWeightUp << "\n";
+//     std::cout << "RenWeightDown   " << RenWeightDown << "\n";
+//     std::cout << "ScaleWeightUp   " << ScaleWeightUp << "\n";
+//     std::cout << "ScaleWeightDown " << ScaleWeightDown << "\n";
+//     std::cout << "PdfWeight       " << PdfWeight << "  " << sqrt(sqsumPdfWeight/float(tmpPdfN)) << "\n";
 
     // Lhe Particles
     std::map<std::string, float> LheMap = theGenAnalyzer->FillLheMap(iEvent);
@@ -464,22 +478,23 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
         else {if(Verbose) std::cout << " - No Iso SF OS Leptons" << std::endl;}
     }
 
-    // ---------- W TO LEPTON and NEUTRINO ----------
-    else if(MuonVect.size()==1 || ElecVect.size()==1) {
-        if(MuonVect.size()==1 && ElecVect.size()==1) isTtoEM = true;
-        else if(ElecVect.size()==1) isWtoEN=true;
-        else if(MuonVect.size()==1) isWtoMN=true;
-        else {if(Verbose) std::cout << " - No Iso Leptons" << std::endl;}
-    }
+//     // ---------- W TO LEPTON and NEUTRINO ----------
+//     else if(MuonVect.size()==1 || ElecVect.size()==1) {
+//         if(MuonVect.size()==1 && ElecVect.size()==1) isTtoEM = true;
+//         else if(ElecVect.size()==1) isWtoEN=true;
+//         else if(MuonVect.size()==1) isWtoMN=true;
+//         else {if(Verbose) std::cout << " - No Iso Leptons" << std::endl;}
+//     }
     
     // ----------- Z TO NEUTRINOS ---------------
-    else if(MuonVect.size()==0 && ElecVect.size()==0 && MET.pt() > 100.) {
+    else if(nLooseMuons==0 && nVetoElectrons==0 && MET.pt() > 100.) {
         isZtoNN=true;
+	//EventWeight*=BTagWeight;//as it is now, it works only for invisible channel where we veto AK8 b-tagged jets
         if(Verbose) std::cout << " - No charged leptons" << std::endl;
     }
 
     else {if(Verbose) std::cout << " - No leptons and not enough MET to have Z->inv" << std::endl; return;}
-    if(isWtoEN || isWtoMN) {if(Verbose) std::cout << " - W->lnu candidate" << std::endl; return;}
+//     if(isWtoEN || isWtoMN) {if(Verbose) std::cout << " - W->lnu candidate" << std::endl; return;}
     //if(not(isZtoEE || isZtoMM || isZtoNN || isWtoEN || isWtoMN)) {if(Verbose) std::cout << " - No V candidate" << std::endl; return;}
     
     Hist["a_nEvents"]->Fill(3., EventWeight);
@@ -600,70 +615,79 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
         if(Ele1.pt() > Ele2.pt()) {ElecVect.push_back(Ele1); ElecVect.push_back(Ele2); }
         else {ElecVect.push_back(Ele2); ElecVect.push_back(Ele1);}
     }
-    else if(isTtoEM) {
-        if(Verbose) std::cout << " - Try to reconstruct TT -> enmn" << std::endl;
-        theV.addDaughter(MuonVect.at(0));
-        theV.addDaughter(ElecVect.at(0));
-        addP4.set(theV);
-    }
-    else if(isWtoMN) {
-        if(Verbose) std::cout << " - Try to reconstruct W -> mn" << std::endl;
-        // W kinematic reconstruction
-        float pz = theUtilities->RecoverNeutrinoPz(&MuonVect.at(0).p4(), &MET.p4());
-        Neutrino.setP4(reco::Particle::LorentzVector(MET.px(), MET.py(), pz, sqrt(MET.pt()*MET.pt() + pz*pz) ));
-        theV.addDaughter(MuonVect.at(0));
-        theV.addDaughter(Neutrino);
-        addP4.set(theV);
-        // SF
-        if(isMC) {
-            float LeptonWeightUnc = 0.;
-            LeptonWeight    *= theMuonAnalyzer->GetMuonTriggerSFMu50(MuonVect.at(0));
-            //LeptonWeight    *= theMuonAnalyzer->GetMuonTrkSF(MuonVect.at(0));
-            LeptonWeight    *= theMuonAnalyzer->GetMuonIdSF(MuonVect.at(0), 0);
-            LeptonWeight    *= theMuonAnalyzer->GetMuonIsoSF(MuonVect.at(0), 0);
-
-            LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonTriggerSFErrorMu50(MuonVect.at(0)),2);
-            //LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonTrkSFError(MuonVect.at(0))        ,2);
-            LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonIdSFError(MuonVect.at(0), 0)      ,2);
-            LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonIsoSFError(MuonVect.at(0), 0)     ,2);
-            
-            LeptonWeightUp   = LeptonWeight+sqrt(LeptonWeightUnc);
-            LeptonWeightDown = LeptonWeight-sqrt(LeptonWeightUnc);                            
-        }
-    }
-    else if(isWtoEN) {
-        if(Verbose) std::cout << " - Try to reconstruct W -> em" << std::endl;
-        // W kinematic reconstruction
-        float pz = theUtilities->RecoverNeutrinoPz(&ElecVect.at(0).p4(), &MET.p4());
-        Neutrino.setP4(reco::Particle::LorentzVector(MET.px(), MET.py(), pz, sqrt(MET.pt()*MET.pt() + pz*pz) ));
-        theV.addDaughter(ElecVect.at(0));
-        theV.addDaughter(Neutrino);
-        addP4.set(theV);
-        // SF
-        if(isMC) {
-            float LeptonWeightUnc = 0.;
-            LeptonWeight    *= theElectronAnalyzer->GetElectronTriggerSFEle105(ElecVect.at(0));
-            LeptonWeight    *= theElectronAnalyzer->GetElectronIdSF(ElecVect.at(0), 0);
-            LeptonWeight    *= theElectronAnalyzer->GetElectronRecoEffSF(ElecVect.at(0));
-
-            LeptonWeightUnc += theElectronAnalyzer->GetElectronTriggerSFErrorEle105(ElecVect.at(0));
-            LeptonWeightUnc += theElectronAnalyzer->GetElectronIdSFError(ElecVect.at(0), 0);
-            LeptonWeightUnc += theElectronAnalyzer->GetElectronRecoEffSFError(ElecVect.at(0));
-
-            LeptonWeightUp   = LeptonWeight+sqrt(LeptonWeightUnc);
-            LeptonWeightDown = LeptonWeight-sqrt(LeptonWeightUnc);                            
-        }
-    }
+//     else if(isTtoEM) {
+//         if(Verbose) std::cout << " - Try to reconstruct TT -> enmn" << std::endl;
+//         theV.addDaughter(MuonVect.at(0));
+//         theV.addDaughter(ElecVect.at(0));
+//         addP4.set(theV);
+//     }
+//     else if(isWtoMN) {
+//         if(Verbose) std::cout << " - Try to reconstruct W -> mn" << std::endl;
+//         // W kinematic reconstruction
+//         float pz = theUtilities->RecoverNeutrinoPz(&MuonVect.at(0).p4(), &MET.p4());
+//         Neutrino.setP4(reco::Particle::LorentzVector(MET.px(), MET.py(), pz, sqrt(MET.pt()*MET.pt() + pz*pz) ));
+//         theV.addDaughter(MuonVect.at(0));
+//         theV.addDaughter(Neutrino);
+//         addP4.set(theV);
+//         // SF
+//         if(isMC) {
+//             float LeptonWeightUnc = 0.;
+//             LeptonWeight    *= theMuonAnalyzer->GetMuonTriggerSFMu50(MuonVect.at(0));
+//             //LeptonWeight    *= theMuonAnalyzer->GetMuonTrkSF(MuonVect.at(0));
+//             LeptonWeight    *= theMuonAnalyzer->GetMuonIdSF(MuonVect.at(0), 0);
+//             LeptonWeight    *= theMuonAnalyzer->GetMuonIsoSF(MuonVect.at(0), 0);
+// 
+//             LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonTriggerSFErrorMu50(MuonVect.at(0)),2);
+//             //LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonTrkSFError(MuonVect.at(0))        ,2);
+//             LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonIdSFError(MuonVect.at(0), 0)      ,2);
+//             LeptonWeightUnc += pow(theMuonAnalyzer->GetMuonIsoSFError(MuonVect.at(0), 0)     ,2);
+//             
+//             LeptonWeightUp   = LeptonWeight+sqrt(LeptonWeightUnc);
+//             LeptonWeightDown = LeptonWeight-sqrt(LeptonWeightUnc);                            
+//         }
+//     }
+//     else if(isWtoEN) {
+//         if(Verbose) std::cout << " - Try to reconstruct W -> em" << std::endl;
+//         // W kinematic reconstruction
+//         float pz = theUtilities->RecoverNeutrinoPz(&ElecVect.at(0).p4(), &MET.p4());
+//         Neutrino.setP4(reco::Particle::LorentzVector(MET.px(), MET.py(), pz, sqrt(MET.pt()*MET.pt() + pz*pz) ));
+//         theV.addDaughter(ElecVect.at(0));
+//         theV.addDaughter(Neutrino);
+//         addP4.set(theV);
+//         // SF
+//         if(isMC) {
+//             float LeptonWeightUnc = 0.;
+//             LeptonWeight    *= theElectronAnalyzer->GetElectronTriggerSFEle105(ElecVect.at(0));
+//             LeptonWeight    *= theElectronAnalyzer->GetElectronIdSF(ElecVect.at(0), 0);
+//             LeptonWeight    *= theElectronAnalyzer->GetElectronRecoEffSF(ElecVect.at(0));
+// 
+//             LeptonWeightUnc += theElectronAnalyzer->GetElectronTriggerSFErrorEle105(ElecVect.at(0));
+//             LeptonWeightUnc += theElectronAnalyzer->GetElectronIdSFError(ElecVect.at(0), 0);
+//             LeptonWeightUnc += theElectronAnalyzer->GetElectronRecoEffSFError(ElecVect.at(0));
+// 
+//             LeptonWeightUp   = LeptonWeight+sqrt(LeptonWeightUnc);
+//             LeptonWeightDown = LeptonWeight-sqrt(LeptonWeightUnc);                            
+//         }
+//     }
     else if(isZtoNN) {
         if(Verbose) std::cout << " - Try to reconstruct Z -> nn" << std::endl;
         theV.addDaughter(MET);
         addP4.set(theV);
+	//std::cout << "Met pt: " << MET.pt() << std::endl;
+	//std::cout << "Trigger eff: " << theJetAnalyzer->GetMetTriggerEfficiency(MET) << std::endl;
+	if(isMC) {
+  	    TriggerWeight *= theJetAnalyzer->GetMetTriggerEfficiency(MET);
+	    TriggerWeightUp *= std::min(1.,(theJetAnalyzer->GetMetTriggerEfficiency(MET))*(1+0.06));//hardcoded 6% unc
+	    TriggerWeightDown *= std::min(1.,(theJetAnalyzer->GetMetTriggerEfficiency(MET))*(1-0.06));//hardcoded 6% unc
+	}
     }
     
     else { if(Verbose) std::cout << " - No reconstructible V candidate" << std::endl; return; }
     // Update event weight with lepton selections
     EventWeight *= LeptonWeight;
-    
+    // Update met trigger weight    
+    EventWeight *= TriggerWeight;
+
     Hist["a_nEvents"]->Fill(4., EventWeight);
     Hist["m_nEvents"]->Fill(9., EventWeight);
 //    if(isZtoEE) Hist["e_nEvents"]->Fill(4., EventWeight);
@@ -712,8 +736,41 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
     // ---------- Event Variables ----------
     
     // Max b-tagged jet in the event
-    for(unsigned int i = 2; i < JetsVect.size(); i++) if(JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag")) > MaxJetBTag) MaxJetBTag = JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag"));
-    // Max b-tagged jet in the event
+    //for(unsigned int i = 2; i < JetsVect.size(); i++) {
+    for(unsigned int i = 0; i < JetsVect.size(); i++) {
+        if(JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag")) > MaxJetBTag && FatJetsVect.size() > 0 && deltaR(FatJetsVect.at(0), JetsVect[i])>0.8) {
+             MaxJetBTag = JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag"));
+	     MaxJetBIndex = i;
+	     BTagWeight *= (JetsVect[i].hasUserFloat("ReshapedDiscriminator")?JetsVect[i].userFloat("ReshapedDiscriminator") : 1.);
+	     BTagWeightUp *= (JetsVect[i].hasUserFloat("ReshapedDiscriminatorUp")?JetsVect[i].userFloat("ReshapedDiscriminatorUp") : 1.);
+	     BTagWeightDown *= (JetsVect[i].hasUserFloat("ReshapedDiscriminatorDown")?JetsVect[i].userFloat("ReshapedDiscriminatorDown") : 1.);
+	     //std::cout << "looping on jets outside the AK8; id: " << i << std::endl;
+	     //std::cout << "CSV value: " << JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag")) << std::endl;
+	     //std::cout << "CSV SF: " << (JetsVect[i].hasUserFloat("ReshapedDiscriminator")?JetsVect[i].userFloat("ReshapedDiscriminator") : -1.)  << std::endl;
+	     //std::cout << "CSV SF Up: " << (JetsVect[i].hasUserFloat("ReshapedDiscriminatorUp")?JetsVect[i].userFloat("ReshapedDiscriminatorUp") : -1.)  << std::endl;
+	     //std::cout << "CSV SF Down: " << (JetsVect[i].hasUserFloat("ReshapedDiscriminatorDown")?JetsVect[i].userFloat("ReshapedDiscriminatorDown") : -1.)  << std::endl;
+
+
+	     //std::cout << "BTagWeight: " << BTagWeight << std::endl;
+	     //std::cout << "BTagWeightUp: " << BTagWeightUp << std::endl;
+	     //std::cout << "BTagWeightDown: " << BTagWeightDown << std::endl;
+        }
+    }
+
+    //std::cout << "CHECK : nJets AK4: " << nJets << std::endl;
+    //std::cout << "CHECK : jet number of the max b tag outside the ak8: " << MaxJetBIndex  << std::endl;
+    //std::cout << "CHECK : MaxJetBTag: " << MaxJetBTag  << std::endl;
+    if(JetsVect.size()>=MaxJetBIndex){
+	     MaxBTagWeight *= (JetsVect[MaxJetBIndex].hasUserFloat("ReshapedDiscriminator")?JetsVect[MaxJetBIndex].userFloat("ReshapedDiscriminator") : 1.);
+	     MaxBTagWeightUp *= (JetsVect[MaxJetBIndex].hasUserFloat("ReshapedDiscriminatorUp")?JetsVect[MaxJetBIndex].userFloat("ReshapedDiscriminatorUp") : 1.);
+	     MaxBTagWeightDown *= (JetsVect[MaxJetBIndex].hasUserFloat("ReshapedDiscriminatorDown")?JetsVect[MaxJetBIndex].userFloat("ReshapedDiscriminatorDown") : 1.);
+	     //      std::cout << "CSV SF: " << (JetsVect[MaxJetBIndex].hasUserFloat("ReshapedDiscriminator")?JetsVect[MaxJetBIndex].userFloat("ReshapedDiscriminator") : -1.)  << std::endl;
+	     //      std::cout << "CSV SF Up: " << (JetsVect[MaxJetBIndex].hasUserFloat("ReshapedDiscriminatorUp")?JetsVect[MaxJetBIndex].userFloat("ReshapedDiscriminatorUp") : -1.)  << std::endl;
+	     //      std::cout << "CSV SF Down: " << (JetsVect[MaxJetBIndex].hasUserFloat("ReshapedDiscriminatorDown")?JetsVect[MaxJetBIndex].userFloat("ReshapedDiscriminatorDown") : -1.)  << std::endl;
+    }
+    //std::cout << "-----------------------------------" << std::endl;
+
+    // Max b-tagged jet in the event //OBSOLETE!
     for(unsigned int i = 0; i < JetsVect.size(); i++) if(FatJetsVect.size() > 0 && JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag")) > MaxFatJetBTag && deltaR(FatJetsVect.at(0), JetsVect[i])>0.8) MaxFatJetBTag = JetsVect[i].bDiscriminator(JetPSet.getParameter<std::string>("btag"));
     
     for(unsigned int i = 0; i < JetsVect.size(); i++) if(fabs(reco::deltaPhi(JetsVect[i].phi(), MET.phi())) < MinJetMetDPhi) MinJetMetDPhi = fabs(reco::deltaPhi(JetsVect[i].phi(), MET.phi()));
@@ -749,18 +806,20 @@ void Diboson::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
     
     // ---------- Fill objects ----------
     if(Verbose) std::cout << " - Filling objects" << std::endl;
-    if(isZtoEE || isWtoEN) for(unsigned int i = 0; i < Leptons.size() && i < ElecVect.size(); i++) ObjectsFormat::FillElectronType(Leptons[i], &ElecVect[i], isMC);
-    else if(isZtoMM || isWtoMN) for(unsigned int i = 0; i < Leptons.size() && i < MuonVect.size(); i++) ObjectsFormat::FillMuonType(Leptons[i], &MuonVect[i], isMC);
-    else if(isTtoEM && Leptons.size() >= 2) {
-        if(ElecVect[0].pt() > MuonVect[0].pt()) {
-            ObjectsFormat::FillElectronType(Leptons[0], &ElecVect[0], isMC);
-            ObjectsFormat::FillMuonType(Leptons[1], &MuonVect[0], isMC);
-        }
-        else {
-            ObjectsFormat::FillMuonType(Leptons[0], &MuonVect[0], isMC);
-            ObjectsFormat::FillElectronType(Leptons[1], &ElecVect[0], isMC);
-        }
-    }
+//     if(isZtoEE || isWtoEN) for(unsigned int i = 0; i < Leptons.size() && i < ElecVect.size(); i++) ObjectsFormat::FillElectronType(Leptons[i], &ElecVect[i], isMC);
+//     else if(isZtoMM || isWtoMN) for(unsigned int i = 0; i < Leptons.size() && i < MuonVect.size(); i++) ObjectsFormat::FillMuonType(Leptons[i], &MuonVect[i], isMC);
+//     else if(isTtoEM && Leptons.size() >= 2) {
+//         if(ElecVect[0].pt() > MuonVect[0].pt()) {
+//             ObjectsFormat::FillElectronType(Leptons[0], &ElecVect[0], isMC);
+//             ObjectsFormat::FillMuonType(Leptons[1], &MuonVect[0], isMC);
+//         }
+//         else {
+//             ObjectsFormat::FillMuonType(Leptons[0], &MuonVect[0], isMC);
+//             ObjectsFormat::FillElectronType(Leptons[1], &ElecVect[0], isMC);
+//         }
+//     }
+    if(isZtoEE) for(unsigned int i = 0; i < Leptons.size() && i < ElecVect.size(); i++) ObjectsFormat::FillElectronType(Leptons[i], &ElecVect[i], isMC);
+    else if(isZtoMM) for(unsigned int i = 0; i < Leptons.size() && i < MuonVect.size(); i++) ObjectsFormat::FillMuonType(Leptons[i], &MuonVect[i], isMC);
     for(unsigned int i = 0; i < Taus.size() && i < TauVect.size(); i++) ObjectsFormat::FillTauType(Taus[i], &TauVect[i], isMC);
     for(unsigned int i = 0; i < Photons.size() && i < PhotonVect.size(); i++) ObjectsFormat::FillPhotonType(Photons[i], &PhotonVect[i], isMC);
     for(unsigned int i = 0; i < Jets.size() && i < JetsVect.size(); i++) ObjectsFormat::FillJetType(Jets[i], &JetsVect[i], isMC);
@@ -821,6 +880,14 @@ void Diboson::beginJob() {
     tree->Branch("PUWeightUp", &PUWeightUp, "PUWeightUp/F");
     tree->Branch("PUWeightDown", &PUWeightDown, "PUWeightDown/F");
     tree->Branch("TriggerWeight", &TriggerWeight, "TriggerWeight/F");
+    tree->Branch("TriggerWeightUp", &TriggerWeightUp, "TriggerWeightUp/F");
+    tree->Branch("TriggerWeightDown", &TriggerWeightDown, "TriggerWeightDown/F");
+    tree->Branch("BTagWeight", &BTagWeight, "BTagWeight/F");
+    tree->Branch("BTagWeightUp", &BTagWeightUp, "BTagWeightUp/F");
+    tree->Branch("BTagWeightDown", &BTagWeightDown, "BTagWeightDown/F");
+    tree->Branch("MaxBTagWeight", &MaxBTagWeight, "MaxBTagWeight/F");
+    tree->Branch("MaxBTagWeightUp", &MaxBTagWeightUp, "MaxBTagWeightUp/F");
+    tree->Branch("MaxBTagWeightDown", &MaxBTagWeightDown, "MaxBTagWeightDown/F");
     tree->Branch("LeptonWeight", &LeptonWeight, "LeptonWeight/F");
     tree->Branch("LeptonWeightUp", &LeptonWeightUp, "LeptonWeightUp/F");
     tree->Branch("LeptonWeightDown", &LeptonWeightDown, "LeptonWeightDown/F");
@@ -834,9 +901,9 @@ void Diboson::beginJob() {
     // Analysis variables
     tree->Branch("isZtoEE", &isZtoEE, "isZtoEE/O");
     tree->Branch("isZtoMM", &isZtoMM, "isZtoMM/O");
-    tree->Branch("isTtoEM", &isTtoEM, "isTtoEM/O");
-    tree->Branch("isWtoEN", &isWtoEN, "isWtoEN/O");
-    tree->Branch("isWtoMN", &isWtoMN, "isWtoMN/O");
+//     tree->Branch("isTtoEM", &isTtoEM, "isTtoEM/O");
+//     tree->Branch("isWtoEN", &isWtoEN, "isWtoEN/O");
+//     tree->Branch("isWtoMN", &isWtoMN, "isWtoMN/O");
     tree->Branch("isZtoNN", &isZtoNN, "isZtoNN/O");
     tree->Branch("isMerged", &isMerged, "isMerged/O");
     tree->Branch("isResolved", &isResolved, "isResolved/O");
@@ -854,6 +921,7 @@ void Diboson::beginJob() {
     tree->Branch("nBTagJets", &nBTagJets, "nBTagJets/I");
     
     tree->Branch("MaxJetBTag", &MaxJetBTag, "MaxJetBTag/F");
+    tree->Branch("MaxJetBIndex", &MaxJetBIndex, "MaxJetBIndex/I");
     tree->Branch("MaxFatJetBTag", &MaxFatJetBTag, "MaxFatJetBTag/F");
     tree->Branch("MinJetMetDPhi", &MinJetMetDPhi, "MinJetMetDPhi/F");
     tree->Branch("Chi2", &Chi2, "Chi2/F");

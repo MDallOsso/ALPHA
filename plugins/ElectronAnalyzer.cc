@@ -32,12 +32,11 @@ ElectronAnalyzer::ElectronAnalyzer(const edm::ParameterSet& PSet, edm::ConsumesC
 {
     isEleVetoIdFile = isEleLooseIdFile = isEleMediumIdFile = isEleTightIdFile = isEleRecoEffFile = isEleMVATrigMediumIdFile = isEleMVATrigTightIdFile = isEleTriggerFile = isEleSingleTriggerFile = false;    
 
-    // FIXME -> 2016 numbers, now obsolete!!!
     // Electron SingleTrigger
     EleSingleTriggerFile=new TFile(EleSingleTriggerFileName.c_str(), "READ");
     if(!EleSingleTriggerFile->IsZombie()) {
       ElectronTriggerEle105=(TH2F*)EleSingleTriggerFile->Get("Ele105/eleTrigEff_Ele105");//X:pt;Y:eta
-      ElectronTriggerEle27Tight=(TH2F*)EleSingleTriggerFile->Get("Ele27_WPTight/eleTrigEff_Ele27Tight");//X:eta;Y:pt
+      ElectronTriggerEle27Tight=(TH2F*)EleSingleTriggerFile->Get("Ele27_WPTight_Gsf"); //X:pt;Y:eta 
       isEleSingleTriggerFile=true;
     }
     else {
@@ -195,27 +194,7 @@ std::vector<pat::Electron> ElectronAnalyzer::FillElectronVector(const edm::Event
         }
         pat::Electron el=*it;
         pat::ElectronRef elRef(EleCollection, elIdx);
-                
-        
-        // Corrections for Ele Smearing (on data only) -- MORIOND 2017
-        double Ecorr=1;
-        if(!isMC) {
-            DetId detid = el.superCluster()->seed()->seed();
-            const EcalRecHit * rh = NULL;
-            if (detid.subdetId() == EcalBarrel) {
-                auto rh_i =  _ebrechits->find(detid);
-                            if( rh_i != _ebrechits->end()) rh =  &(*rh_i);
-                            else rh = NULL;
-                    } 
-            if(rh==NULL) Ecorr=1;
-            else{
-            if(rh->energy() > 200 && rh->energy()<300)  Ecorr=1.0199;
-            else if(rh->energy()>300 && rh->energy()<400) Ecorr=  1.052;
-            else if(rh->energy()>400 && rh->energy()<500) Ecorr = 1.015;
-            }
-        }
-        el.setP4(reco::Candidate::LorentzVector(el.px(), el.py(), el.pz(), Ecorr*el.energy() ));      
-        
+                        
         // Pt and eta
         if(el.pt()<PtTh || fabs(el.eta())>2.5) continue;
         // PF (?) Isolation R=0.4 https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammaPFBasedIsolation#for_PAT_electron_users_using_sta
@@ -407,12 +386,12 @@ float ElectronAnalyzer::GetElectronTriggerSFErrorEle105(pat::Electron& ele) {
 
 float ElectronAnalyzer::GetElectronTriggerSFEle27Tight(pat::Electron& ele) {
     if(!isEleSingleTriggerFile) return 1.;
-    double pt = std::min( std::max( ElectronTriggerEle27Tight->GetYaxis()->GetXmin(), ele.pt() ) , ElectronTriggerEle27Tight->GetYaxis()->GetXmax() - 0.000001 );
+    double pt = std::min( std::max( ElectronTriggerEle27Tight->GetXaxis()->GetXmin(), ele.pt() ) , ElectronTriggerEle27Tight->GetXaxis()->GetXmax() - 0.000001 );
     double eta = 0.;
     if (ele.eta() > 0)
-        eta = std::min( ElectronTriggerEle27Tight->GetXaxis()->GetXmax() - 0.000001 , ele.eta() );
+        eta = std::min( ElectronTriggerEle27Tight->GetYaxis()->GetXmax() - 0.000001 , ele.eta() );
     else
-        eta = std::max( ElectronTriggerEle27Tight->GetXaxis()->GetXmin() + 0.000001 , ele.eta() );
+        eta = std::max( ElectronTriggerEle27Tight->GetYaxis()->GetXmin() + 0.000001 , ele.eta() );
         
     return ElectronTriggerEle27Tight->GetBinContent( ElectronTriggerEle27Tight->FindBin(eta, pt) );
 }

@@ -65,6 +65,9 @@ Dibottom::Dibottom(const edm::ParameterSet& iConfig):
     
     std::vector<std::string> TriggerList(TriggerPSet.getParameter<std::vector<std::string> >("paths"));
     for(unsigned int i = 0; i < TriggerList.size(); i++) TriggerMap[ TriggerList[i] ] = false;
+
+    std::vector<std::string> MetFiltersList(TriggerPSet.getParameter<std::vector<std::string> >("metpaths"));
+    for(unsigned int i = 0; i < MetFiltersList.size(); i++) MetFiltersMap[ MetFiltersList[i] ] = false;
         
     // ---------- Plots Initialization ----------
     TFileDirectory allDir=fs->mkdir("All/");
@@ -196,6 +199,9 @@ Dibottom::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
   // Trigger
   theTriggerAnalyzer->FillTriggerMap(iEvent, TriggerMap);
+  theTriggerAnalyzer->FillMetFiltersMap(iEvent, MetFiltersMap);
+  BadPFMuonFlag = theTriggerAnalyzer->GetBadPFMuonFlag(iEvent);
+  BadChCandFlag = theTriggerAnalyzer->GetBadChCandFlag(iEvent);
   EventWeight *= TriggerWeight;
 
   // Electrons 
@@ -256,27 +262,28 @@ Dibottom::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   
   // Gen weights
   std::map<int, float> GenWeight = theGenAnalyzer->FillWeightsMap(iEvent);
-  EventWeight *= GenWeight[-1];
-  //product id
-  if(GenWeight.find(2) != GenWeight.end()) FacWeightUp     = GenWeight[2];
-  if(GenWeight.find(3) != GenWeight.end()) FacWeightDown   = GenWeight[3];
-  if(GenWeight.find(4) != GenWeight.end()) RenWeightUp     = GenWeight[4];
-  if(GenWeight.find(7) != GenWeight.end()) RenWeightDown   = GenWeight[7];
-  if(GenWeight.find(5) != GenWeight.end()) ScaleWeightUp   = GenWeight[5];
-  if(GenWeight.find(9) != GenWeight.end()) ScaleWeightDown = GenWeight[9];
-
-  float tmpPdfWeight = 0.;
+  
+  if(GenWeight.find(-1) != GenWeight.end()) EventWeight   *= GenWeight[-1];
+  if(GenWeight.find(1) != GenWeight.end()) FacWeightUp     = GenWeight[1];
+  if(GenWeight.find(2) != GenWeight.end()) FacWeightDown   = GenWeight[2];
+  if(GenWeight.find(3) != GenWeight.end()) RenWeightUp     = GenWeight[3];
+  if(GenWeight.find(6) != GenWeight.end()) RenWeightDown   = GenWeight[6];
+  if(GenWeight.find(4) != GenWeight.end()) ScaleWeightUp   = GenWeight[4];
+  if(GenWeight.find(8) != GenWeight.end()) ScaleWeightDown = GenWeight[8];
+  
+  float sumPdfWeight = 0.;
+  float sqsumPdfWeight = 0.;
   int   tmpPdfN = 0;
   for(auto const& pdfw : GenWeight) {
-    if (pdfw.first > 9 && pdfw.second>0) {
+    if (pdfw.first >=   9  && 
+	pdfw.first <= 109  && 
+	pdfw.second>0) { 
       ++tmpPdfN;
-      //std::cout << "pdf " << tmpPdfN << " = " << pdfw.second << "\n";
-      tmpPdfWeight = tmpPdfWeight + pdfw.second*pdfw.second;
+      sumPdfWeight   = sumPdfWeight   + pdfw.second;
+      sqsumPdfWeight = sqsumPdfWeight + pdfw.second*pdfw.second;
     }
   }
-  PdfWeight = sqrt(tmpPdfWeight/tmpPdfN);
-  //     std::cout << "PdfWeight " << PdfWeight << "\n";
-  
+  if (tmpPdfN>0) PdfWeight = 1. + sqrt(sqsumPdfWeight/float(tmpPdfN)) - sumPdfWeight/float(tmpPdfN); /// 1 + RMS - MEAN
   
   // Lhe Particles
   // reading LHE event content and prepare it in Map format std::map<std::string, float>
@@ -705,7 +712,11 @@ Dibottom::beginJob()
   
   // Set trigger branches
   for(auto it = TriggerMap.begin(); it != TriggerMap.end(); it++) tree->Branch(it->first.c_str(), &(it->second), (it->first+"/O").c_str());
-  
+  for(auto it = MetFiltersMap.begin(); it != MetFiltersMap.end(); it++) tree->Branch(it->first.c_str(), &(it->second), (it->first+"/O").c_str());
+
+  tree->Branch("Flag_BadPFMuon", &BadPFMuonFlag, "Flag_BadPFMuon/O");  
+  tree->Branch("Flag_BadChCand", &BadChCandFlag, "Flag_BadChCand/O");
+
   // Analysis variables
   tree->Branch("isZtoEE", &isZtoEE, "isZtoEE/O");
   tree->Branch("isZtoMM", &isZtoMM, "isZtoMM/O");

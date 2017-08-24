@@ -129,6 +129,7 @@ class Diboson : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
         edm::ParameterSet TriggerPSet;
         edm::ParameterSet ElectronPSet;
         edm::ParameterSet MuonPSet;
+        edm::ParameterSet MuonLoosePSet;
         edm::ParameterSet TauPSet;
         edm::ParameterSet PhotonPSet;
         edm::ParameterSet JetPSet;
@@ -145,6 +146,7 @@ class Diboson : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
         TriggerAnalyzer* theTriggerAnalyzer;
         ElectronAnalyzer* theElectronAnalyzer;
         MuonAnalyzer* theMuonAnalyzer;
+        MuonAnalyzer* theMuonLooseAnalyzer;
         TauAnalyzer* theTauAnalyzer;
         PhotonAnalyzer* thePhotonAnalyzer;
         JetAnalyzer* theJetAnalyzer;
@@ -162,13 +164,16 @@ class Diboson : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
         bool isMC, isZtoEE, isZtoMM, isTtoEM, isWtoEN, isWtoMN, isZtoNN, isMerged, isResolved;
         long int EventNumber, RunNumber, LumiNumber;
         float EventWeight, StitchWeight, ZewkWeight, WewkWeight;
-        float TriggerWeight;
+        float TriggerWeight, TriggerWeightUp, TriggerWeightDown;
+        float BTagWeight, BTagWeightUp, BTagWeightDown;
+        float MaxBTagWeight, MaxBTagWeightUp, MaxBTagWeightDown;
         float LeptonWeight, LeptonWeightUp, LeptonWeightDown;
         float PUWeight, PUWeightUp, PUWeightDown;
         float FacWeightUp, FacWeightDown, RenWeightUp, RenWeightDown, ScaleWeightUp, ScaleWeightDown;
         float PdfWeight;
         int nPV, nElectrons, nVetoElectrons, nMuons, nLooseMuons, nTaus, nPhotons, nJets, nFatJets, nBTagJets;
         float MaxJetBTag, MaxFatJetBTag, MinJetMetDPhi, Chi2;
+        unsigned int MaxJetBIndex;
         // Angular
         float CosThetaStar, CosTheta1, CosTheta2, Phi, Phi1, AngularLD;
         // Mass recoil formula

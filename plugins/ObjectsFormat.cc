@@ -388,7 +388,9 @@ void ObjectsFormat::FillFatJetType(FatJetType& I, const pat::Jet* R, bool isMC) 
     I.softdropPuppiMass     = R->hasUserFloat("ak8PFJetsPuppiSoftDropMass") ? R->userFloat("ak8PFJetsPuppiSoftDropMass") : -1.;
     I.prunedMassCorr        = R->hasUserFloat("ak8PFJetsCHSPrunedMassCorr") ? R->userFloat("ak8PFJetsCHSPrunedMassCorr") : -1.;
     I.softdropMassCorr      = R->hasUserFloat("ak8PFJetsCHSSoftDropMassCorr") ? R->userFloat("ak8PFJetsCHSSoftDropMassCorr") : -1.;
-    I.softdropPuppiMassCorr = R->hasUserFloat("ak8PFJetsPuppiSoftDropMassCorr") ? R->userFloat("ak8PFJetsPuppiSoftDropMassCorr") : -1.;
+    if(!isMC) I.softdropPuppiMassCorr = R->hasUserFloat("ak8PFJetsPuppiSoftDropMassCorr") ? R->userFloat("ak8PFJetsPuppiSoftDropMassCorr") : -1.;
+    if(isMC) I.softdropPuppiMassCorr = R->hasUserFloat("ak8PFJetsPuppiSoftDropMassCorrJMR") ? R->userFloat("ak8PFJetsPuppiSoftDropMassCorrJMR") : -1.;//smeared softdrop puppi mass for MC
+    I.softdropPuppiMassCorrNotSmeared = R->hasUserFloat("ak8PFJetsPuppiSoftDropMassCorrNotSmeared") ? R->userFloat("ak8PFJetsPuppiSoftDropMassCorrNotSmeared") : -1.;
     I.pt1         = R->subjets("SoftDrop").size() > 0 ? R->subjets("SoftDrop")[0]->pt() : -1.;
     I.eta1        = R->subjets("SoftDrop").size() > 0 ? R->subjets("SoftDrop")[0]->eta() : -1.;
     I.phi1        = R->subjets("SoftDrop").size() > 0 ? R->subjets("SoftDrop")[0]->phi() : -1.;
@@ -475,6 +477,7 @@ void ObjectsFormat::ResetFatJetType(FatJetType& I) {
     I.prunedMassCorr        = -1.;
     I.softdropMassCorr      = -1.;
     I.softdropPuppiMassCorr = -1.;
+    I.softdropPuppiMassCorrNotSmeared = -1.;
     I.pt1         = -1.;
     I.eta1        = -9.;
     I.phi1        = -9.;
@@ -540,7 +543,7 @@ void ObjectsFormat::ResetFatJetType(FatJetType& I) {
     I.softdropPuppiMassCorrJMRDown = -1.;
 }
 
-std::string ObjectsFormat::ListFatJetType() {return "pt/F:eta/F:phi/F:mass/F:energy/F:ptRaw/F:ptUnc/F:dPhi_met/F:dPhi_Jet1/F:puId/F:CSV/F:CSVR/F:CSVRUp/F:CSVRDown/F:prunedMass/F:softdropMass/F:softdropPuppiMass/F:prunedMassCorr/F:softdropMassCorr/F:softdropPuppiMassCorr/F:pt1/F:eta1/F:phi1/F:mass1/F:CSV1/F:CSVR1/F:CSVR1Up/F:CSVR1Down/F:CMVA1/F:CMVAR1/F:CMVAR1Up/F:CMVAR1Down/F:flavour1/F:pt2/F:eta2/F:phi2/F:mass2/F:CSV2/F:CSVR2/F:CSVR2Up/F:CSVR2Down/F:CMVA2/F:CMVAR2/F:CMVAR2Up/F:CMVAR2Down/F:flavour2/F:dR/F:chsTau21/F:puppiTau21/F:ddtTau21/F:BDSV/F:chf/F:nhf/F:phf/F:elf/F:muf/F:chm/I:npr/I:flavour/I:mother/I:isLoose/O:isMedium/O:isTight/O:isTightLepVeto/O:isCSVL/O:isCSVM/O:isCSVT/O:isMatched/O:JESUnc/F:ptJERUp/F:etaJERUp/F:phiJERUp/F:energyJERUp/F:ptJERDown/F:etaJERDown/F:phiJERDown/F:energyJERDown/F:smearFact/F:smearFactUp/F:smearFactDown/F:softdropPuppiMassCorrJMS/F:softdropPuppiMassCorrJMSUp/F:softdropPuppiMassCorrJMSDown/F:softdropPuppiMassCorrJMR/F:softdropPuppiMassCorrJMRUp/F:softdropPuppiMassCorrJMRDown/F";}
+std::string ObjectsFormat::ListFatJetType() {return "pt/F:eta/F:phi/F:mass/F:energy/F:ptRaw/F:ptUnc/F:dPhi_met/F:dPhi_Jet1/F:puId/F:CSV/F:CSVR/F:CSVRUp/F:CSVRDown/F:prunedMass/F:softdropMass/F:softdropPuppiMass/F:prunedMassCorr/F:softdropMassCorr/F:softdropPuppiMassCorr/F:softdropPuppiMassCorrNotSmeared/F:pt1/F:eta1/F:phi1/F:mass1/F:CSV1/F:CSVR1/F:CSVR1Up/F:CSVR1Down/F:CMVA1/F:CMVAR1/F:CMVAR1Up/F:CMVAR1Down/F:flavour1/F:pt2/F:eta2/F:phi2/F:mass2/F:CSV2/F:CSVR2/F:CSVR2Up/F:CSVR2Down/F:CMVA2/F:CMVAR2/F:CMVAR2Up/F:CMVAR2Down/F:flavour2/F:dR/F:chsTau21/F:puppiTau21/F:ddtTau21/F:BDSV/F:chf/F:nhf/F:phf/F:elf/F:muf/F:chm/I:npr/I:flavour/I:mother/I:isLoose/O:isMedium/O:isTight/O:isTightLepVeto/O:isCSVL/O:isCSVM/O:isCSVT/O:isMatched/O:JESUnc/F:ptJERUp/F:etaJERUp/F:phiJERUp/F:energyJERUp/F:ptJERDown/F:etaJERDown/F:phiJERDown/F:energyJERDown/F:smearFact/F:smearFactUp/F:smearFactDown/F:softdropPuppiMassCorrJMS/F:softdropPuppiMassCorrJMSUp/F:softdropPuppiMassCorrJMSDown/F:softdropPuppiMassCorrJMR/F:softdropPuppiMassCorrJMRUp/F:softdropPuppiMassCorrJMRDown/F";}
 
 
 
@@ -571,16 +574,24 @@ void ObjectsFormat::FillMEtType(MEtType& I, const pat::MET* R, bool isMC) {
     I.eta         = R->eta();
     I.phi         = R->phi();
     I.sign        = R->metSignificance();
+    I.ptShiftJetResUp = R->hasUserFloat("ptShiftJetResUp") ? R->userFloat("ptShiftJetResUp") : -1;
+    I.ptShiftJetResDown = R->hasUserFloat("ptShiftJetResDown") ? R->userFloat("ptShiftJetResDown") : -1;
+    I.ptShiftJetEnUp = R->hasUserFloat("ptShiftJetEnUp") ? R->userFloat("ptShiftJetEnUp") : -1;
+    I.ptShiftJetEnDown = R->hasUserFloat("ptShiftJetEnDown") ? R->userFloat("ptShiftJetEnDown") : -1;
+    I.ptShiftUnclusteredEnUp = R->hasUserFloat("ptShiftUnclusteredEnUp") ? R->userFloat("ptShiftUnclusteredEnUp") : -1;
+    I.ptShiftUnclusteredEnDown = R->hasUserFloat("ptShiftUnclusteredEnDown") ? R->userFloat("ptShiftUnclusteredEnDown") : -1;
+    I.ptShiftJetResUpSmear = R->hasUserFloat("ptShiftJetResUpSmear") ? R->userFloat("ptShiftJetResUpSmear") : -1.;
+    I.ptShiftJetResDownSmear = R->hasUserFloat("ptShiftJetResDownSmear") ? R->userFloat("ptShiftJetResDownSmear") : -1.;
     I.ptRaw       = R->hasUserFloat("ptRaw") ? R->userFloat("ptRaw") : -1.;
     I.phiRaw      = R->hasUserFloat("phiRaw") ? R->userFloat("phiRaw") : -9.;
-    I.ptType1     = R->hasUserFloat("ptType1") ? R->userFloat("ptType1") : -1.;
-    I.phiType1    = R->hasUserFloat("phiType1") ? R->userFloat("phiType1") : -9.;
+    //I.ptType1     = R->hasUserFloat("ptType1") ? R->userFloat("ptType1") : -1.;
+    //I.phiType1    = R->hasUserFloat("phiType1") ? R->userFloat("phiType1") : -9.;
     if(isMC && R->genMET()) {I.ptGen       = R->genMET()->pt();}
     if(isMC && R->genMET()) {I.phiGen      = R->genMET()->phi();}
-    I.ptScaleUp   = R->hasUserFloat("ptScaleUp") ? R->userFloat("ptScaleUp") : -1.;
-    I.ptScaleDown = R->hasUserFloat("ptScaleDown") ? R->userFloat("ptScaleDown") : -1.;
-    I.ptResUp     = R->hasUserFloat("ptResUp") ? R->userFloat("ptResUp") : -1.;
-    I.ptResDown   = R->hasUserFloat("ptResDown") ? R->userFloat("ptResDown") : -1.;
+    //I.ptScaleUp   = R->hasUserFloat("ptScaleUp") ? R->userFloat("ptScaleUp") : -1.;
+    //I.ptScaleDown = R->hasUserFloat("ptScaleDown") ? R->userFloat("ptScaleDown") : -1.;
+    //I.ptResUp     = R->hasUserFloat("ptResUp") ? R->userFloat("ptResUp") : -1.;
+    //I.ptResDown   = R->hasUserFloat("ptResDown") ? R->userFloat("ptResDown") : -1.;
     I.ptCalo      = R->caloMETPt();
 }
 
@@ -589,20 +600,29 @@ void ObjectsFormat::ResetMEtType(MEtType& I) {
     I.eta         = -9.;
     I.phi         = -9.;
     I.sign        = -1.;
+    I.ptShiftJetResUp = -1.;
+    I.ptShiftJetResDown = -1.;
+    I.ptShiftJetEnUp = -1.;
+    I.ptShiftJetEnDown = -1.;
+    I.ptShiftUnclusteredEnUp = -1.;
+    I.ptShiftUnclusteredEnDown = -1.;
+    I.ptShiftJetResUpSmear = -1.;
+    I.ptShiftJetResDownSmear = -1.;
     I.ptRaw       = -1.;
     I.phiRaw      = -9.;
-    I.ptType1     = -1.;
-    I.phiType1    = -9.;
+    //I.ptType1     = -1.;
+    //I.phiType1    = -9.;
     I.ptGen       = -1.;
     I.phiGen      = -9.;
-    I.ptScaleUp   = -1.;
-    I.ptScaleDown = -1.;
-    I.ptResUp     = -1.;
-    I.ptResDown   = -1.;
+    //I.ptScaleUp   = -1.;
+    //I.ptScaleDown = -1.;
+    //I.ptResUp     = -1.;
+    //I.ptResDown   = -1.;
     I.ptCalo      = -1.;
 }
 
-std::string ObjectsFormat::ListMEtType() {return "pt/F:eta/F:phi/F:sign/F:ptRaw/F:phiRaw/F:ptType1/F:phiType1/F:ptGen/F:phiGen/F:ptScaleUp/F:ptScaleDown/F:ptResUp/F:ptResDown/F:ptCalo/F";}
+//std::string ObjectsFormat::ListMEtType() {return "pt/F:eta/F:phi/F:sign/F:ptRaw/F:phiRaw/F:ptGen/F:phiGen/F:ptCalo/F";}
+std::string ObjectsFormat::ListMEtType() {return "pt/F:eta/F:phi/F:sign/F:ptShiftJetResUp/F:ptShiftJetResDown/F:ptShiftJetEnUp/F:ptShiftJetEnDown/F:ptShiftUnclusteredEnUp/F:ptShiftUnclusteredEnDown/F:ptShiftJetResUpSmear/F:ptShiftJetResDownSmear/F:ptRaw/F:phiRaw/F:ptGen/F:phiGen/F:ptCalo/F";}
 
 
 
@@ -617,6 +637,8 @@ void ObjectsFormat::FillMEtFullType(MEtFullType& I, const pat::MET* R, bool isMC
     if(isMC && R->genMET()) {I.phiGen      = R->genMET()->phi();}
     I.ptJERUp     = R->shiftedPt(pat::MET::METUncertainty::JetResUp);
     I.ptJERDown   = R->shiftedPt(pat::MET::METUncertainty::JetResDown);
+    I.ptJERUpSmear     = R->shiftedPt(pat::MET::METUncertainty::JetResUpSmear);
+    I.ptJERDownSmear   = R->shiftedPt(pat::MET::METUncertainty::JetResDownSmear);
     I.ptJESUp     = R->shiftedPt(pat::MET::METUncertainty::JetEnUp);
     I.ptJESDown   = R->shiftedPt(pat::MET::METUncertainty::JetEnDown);
     I.ptMUSUp     = R->shiftedPt(pat::MET::METUncertainty::MuonEnUp);
@@ -647,6 +669,8 @@ void ObjectsFormat::ResetMEtFullType(MEtFullType& I) {
     I.phiGen      = -9.;
     I.ptJERUp     = -1.;
     I.ptJERDown   = -1.;
+    I.ptJERUpSmear     = -1.;
+    I.ptJERDownSmear   = -1.;
     I.ptJESUp     = -1.;
     I.ptJESDown   = -1.;
     I.ptMUSUp     = -1.;
@@ -666,7 +690,7 @@ void ObjectsFormat::ResetMEtFullType(MEtFullType& I) {
     I.muf         = -1.;
 }
 
-std::string ObjectsFormat::ListMEtFullType() {return "pt/F:eta/F:phi/F:sign/F:ptRaw/F:phiRaw/F:ptGen/F:phiGen/F:ptJERUp/F:ptJERDown/F:ptJESUp/F:ptJESDown/F:ptMUSUp/F:ptMUSDown/F:ptELSUp/F:ptELSDown/F:ptTAUUp/F:ptTAUDown/F:ptUNCUp/F:ptUNCDown/F:ptPHOUp/F:ptPHODown/F:phf/F:nhf/F:elf/F:chf/F:muf/F";}
+std::string ObjectsFormat::ListMEtFullType() {return "pt/F:eta/F:phi/F:sign/F:ptRaw/F:phiRaw/F:ptGen/F:phiGen/F:ptJERUp/F:ptJERDown/F:ptJERUpSmear/F:ptJERDownSmear/F:ptJESUp/F:ptJESDown/F:ptMUSUp/F:ptMUSDown/F:ptELSUp/F:ptELSDown/F:ptTAUUp/F:ptTAUDown/F:ptUNCUp/F:ptUNCDown/F:ptPHOUp/F:ptPHODown/F:phf/F:nhf/F:elf/F:chf/F:muf/F";}
 
 
 void ObjectsFormat::FillCandidateType(CandidateType& I, pat::CompositeCandidate* R, bool isMC) {

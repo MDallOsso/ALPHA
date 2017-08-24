@@ -26,8 +26,8 @@ HHAnalyzer::HHAnalyzer(const edm::ParameterSet& iConfig):
     theTriggerAnalyzer  = new TriggerAnalyzer(TriggerPSet, consumesCollector());
     theElectronAnalyzer = new ElectronAnalyzer(ElectronPSet, consumesCollector());
     theMuonAnalyzer     = new MuonAnalyzer(MuonPSet, consumesCollector());
-    theJetAnalyzer      = new JetAnalyzer(JetPSet, consumesCollector());
-    
+    theJetAnalyzer      = new JetAnalyzer(JetPSet, consumesCollector());    
+
     std::vector<std::string> TriggerList(TriggerPSet.getParameter<std::vector<std::string> >("paths"));
         
     // ---------- Plots Initialization ----------
@@ -94,9 +94,8 @@ void HHAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup
     EventInfo.setIsMC(!iEvent.isRealData());
 
    
-    EventWeight = StitchWeight = TriggerWeight = LeptonWeight = 1.;
+    EventWeight = TriggerWeight = LeptonWeight = 1.;
     PUWeight = PUWeightUp = PUWeightDown = 1.;
-    FacWeightUp = FacWeightDown = RenWeightUp = RenWeightDown = ScaleWeightUp = ScaleWeightDown = 1.;
     PdfWeight = 1.;
     nPV = nElectrons = nMuons = nJets = nFatJets = nBTagJets = -1;
 
@@ -152,46 +151,17 @@ void HHAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup
     // Missing Energy
     pat::MET MET = theJetAnalyzer->FillMetVector(iEvent);
     pat::MET Neutrino(MET);
-    //float metNoMupx = MET.px();
-    //float metNoMupy = MET.py();
-    //for(unsigned int i=0; i<LooseMuonVect.size();i++){
-    //  metNoMupx -= LooseMuonVect.at(i).px();
-    //  metNoMupy -= LooseMuonVect.at(i).py();
-    //}
-    //reco::Particle::LorentzVector metNoMup4(metNoMupx, metNoMupy, 0, 0 );
-    //MET.addUserFloat("metNoMu",metNoMup4.px());
-    //MET.addUserFloat("phiNoMu",metNoMup4.phi());
     
     // -----------------------------------
     //           GEN LEVEL
     // -----------------------------------
     
     // Gen weights
-    std::map<int, float> GenWeight = theGenAnalyzer->FillWeightsMap(iEvent);
-    EventWeight *= GenWeight[-1];
-    if(GenWeight.find(2) != GenWeight.end()) FacWeightUp     = GenWeight[2];
-    if(GenWeight.find(3) != GenWeight.end()) FacWeightDown   = GenWeight[3];
-    if(GenWeight.find(4) != GenWeight.end()) RenWeightUp     = GenWeight[4];
-    if(GenWeight.find(7) != GenWeight.end()) RenWeightDown   = GenWeight[7];
-    if(GenWeight.find(5) != GenWeight.end()) ScaleWeightUp   = GenWeight[5];
-    if(GenWeight.find(9) != GenWeight.end()) ScaleWeightDown = GenWeight[9];
-    
-    float tmpPdfWeight = 0.;
-    int   tmpPdfN = 0;
-    for(auto const& pdfw : GenWeight) {
-        if (pdfw.first > 9 && pdfw.second>0) {
-            ++tmpPdfN;
-            //std::cout << "pdf " << tmpPdfN << " = " << pdfw.second << "\n";
-            tmpPdfWeight = tmpPdfWeight + pdfw.second*pdfw.second;
-        }
-    }
-    PdfWeight = sqrt(tmpPdfWeight/tmpPdfN);
-    //std::cout << "PdfWeight " << PdfWeight << "\n";
-
+    std::map<int, float> GenWeight = theGenAnalyzer->LHEWeightsMap(iEvent);
+    EventWeight *= GenWeight[-1]; // apply default weight
+     
     // LHE Particles
     std::map<std::string, float> LheMap = theGenAnalyzer->FillLheMap(iEvent);
-    // MC Stitching
-    StitchWeight = theGenAnalyzer->GetStitchWeight(LheMap);
     // Gen Particles
     std::vector<reco::GenParticle> GenPVect = theGenAnalyzer->FillGenVector(iEvent);    
     std::vector<reco::GenParticle> GenHsPart;
@@ -219,12 +189,6 @@ void HHAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup
 
     // fill weights
     weightPairs.emplace_back("EventWeight", EventWeight);
-    weightPairs.emplace_back("FacWeightUp", FacWeightUp);
-    weightPairs.emplace_back("FacWeightDown", FacWeightDown);
-    weightPairs.emplace_back("ScaleWeightUp", ScaleWeightUp);
-    weightPairs.emplace_back("ScaleWeightDown", ScaleWeightDown);
-    weightPairs.emplace_back("PdfWeight", PdfWeight);
-    weightPairs.emplace_back("StichWeight", StitchWeight);
     weightPairs.emplace_back("PUWeight", PUWeight);
     weightPairs.emplace_back("PUWeightUp", PUWeightUp);
     weightPairs.emplace_back("PUWeightDown", PUWeightDown);
@@ -232,6 +196,11 @@ void HHAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup
     weightPairs.emplace_back("LeptonWeight", LeptonWeight);
     weightPairs.emplace_back("LeptonWeightUp", LeptonWeightUp);
     weightPairs.emplace_back("LeptonWeightDown", LeptonWeightDown);
+
+    // add all LHE weights ("lhe_weight_{id}",lhe_weight_{id})
+    for (const auto & weight : GenWeight) {
+      weightPairs.emplace_back("lhe_weight_"+std::to_string(weight.first), weight.second);
+    }
 
 
     // fill sorting vectors

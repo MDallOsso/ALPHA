@@ -95,17 +95,43 @@ std::map<int, float> GenAnalyzer::FillWeightsMap(const edm::Event& iEvent) {
     iEvent.getByToken(LheToken, LheEventCollection);
     const LHEEventProduct* Product = LheEventCollection.product();
     
-    Weights[-1] = fabs(Product->originalXWGTUP()) / Product->originalXWGTUP();
-    
+    Weights[-1] = GenEventCollection->weight()/fabs(GenEventCollection->weight());
+     
     for(unsigned int i = 0; i < Product->weights().size(); i++) {
-        Weights[ std::stoi(Product->weights()[i].id) ] = Product->weights()[i].wgt / Product->originalXWGTUP();
+        Weights[ i ] = Product->weights()[i].wgt / Product->originalXWGTUP();
     }
-//    for(auto it = Product->weights().begin(); it != Product->weights().end(), i<10; ++it, i++) {
-//        std::cout << it->id << "     " << it->wgt << std::endl;
-//        Weights[it->id] = it->wgt;
-//    }
+
     return Weights;
 }
+
+// similar to previous function but using ids instead of indexes
+std::map<int, float> GenAnalyzer::LHEWeightsMap(const edm::Event& iEvent) {
+
+    std::map<int, float> weights;
+    weights[-1] = 1.; // default eventWeight
+
+    if(iEvent.isRealData() or PythiaLOSample) return weights;
+    // Declare and open collection
+    edm::Handle<GenEventInfoProduct> GenEventCollection;
+    iEvent.getByToken(GenToken, GenEventCollection);
+    // Declare and open collection
+    edm::Handle<LHEEventProduct> LheEventCollection;
+    iEvent.getByToken(LheToken, LheEventCollection);
+
+    // get  product and original weight
+    const LHEEventProduct* lhe_product = LheEventCollection.product();
+    const auto original_w = lhe_product->originalXWGTUP();
+    
+    // default will be the sign for MC 
+    weights[-1] = GenEventCollection->weight()/fabs(GenEventCollection->weight());
+     
+    for(const auto & weight : lhe_product->weights()) {
+        weights[std::stoi(weight.id)] = weight.wgt / original_w;
+    }
+
+    return weights;
+}
+
 
 
 // ---------- GEN PARTICLES ----------

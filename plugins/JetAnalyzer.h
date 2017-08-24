@@ -35,7 +35,8 @@
 #include "JetMETCorrections/Modules/interface/JetResolution.h"
 #include <CondFormats/JetMETObjects/interface/JetResolutionObject.h>
 
-#include "BTagCalibrationStandalone.h"
+#include "CondFormats/BTauObjects/interface/BTagCalibration.h"
+#include "CondTools/BTau/interface/BTagCalibrationReader.h"
 
 #include "DataFormats/Common/interface/Ptr.h"
 
@@ -58,6 +59,7 @@ class JetAnalyzer {
         virtual void AddVariables(std::vector<pat::Jet>&, pat::MET&);
         virtual int GetNBJets(std::vector<pat::Jet>&);
         virtual pat::MET FillMetVector(const edm::Event&);
+	virtual float GetMetTriggerEfficiency(pat::MET&);
         virtual void ApplyRecoilCorrections(pat::MET&, const reco::Candidate::LorentzVector*, const reco::Candidate::LorentzVector*, int);
         //virtual float GetScaleUncertainty(pat::Jet&);
 //         virtual float GetResolutionRatio(float);
@@ -93,6 +95,7 @@ class JetAnalyzer {
         bool UseRecoil;
         std::string RecoilMCFile;
         std::string RecoilDataFile;
+        std::string MetTriggerFileName;
         std::string JerName_res;
         std::string JerName_sf;
         float Rparameter;
@@ -101,7 +104,11 @@ class JetAnalyzer {
         TF1* PuppiJECcorr_gen;
         TF1* PuppiJECcorr_reco_0eta1v3;
         TF1* PuppiJECcorr_reco_1v3eta2v5;
-        
+
+	TFile* MetTriggerFile;
+	TH1F* MetTriggerHisto;
+	bool isMetTriggerFile;
+
         // JEC Uncertainty
         JetCorrectionUncertainty* jecUncMC;
         JetCorrectionUncertainty* jecUncDATA;
@@ -113,20 +120,10 @@ class JetAnalyzer {
         
         // Btag calibrations
         BTagCalibration       * calib;
-    
-        BTagCalibrationReader * reader;
-        BTagCalibrationReader * reader_up_jes;
-        BTagCalibrationReader * reader_down_jes;
-//        BTagCalibrationReader * reader_up_lf;
-//        BTagCalibrationReader * reader_up_hfstats1;
-//        BTagCalibrationReader * reader_up_hfstats2;
-//        BTagCalibrationReader * reader_up_cferr1;
-//        BTagCalibrationReader * reader_up_cferr2;
-//        BTagCalibrationReader * reader_down_lf;
-//        BTagCalibrationReader * reader_down_hfstats1;
-//        BTagCalibrationReader * reader_down_hfstats2;
-//        BTagCalibrationReader * reader_down_cferr1;
-//        BTagCalibrationReader * reader_down_cferr2;
+	std::map < int , BTagEntry::JetFlavor > flavour_map; 
+	std::map< BTagEntry::JetFlavor, std::vector<std::string>> syst_map; 
+	std::map<std::string, BTagCalibrationReader> cr_map;
+	std::string sf_mode;
         
         //JME
         JME::JetResolution              * resolution;
